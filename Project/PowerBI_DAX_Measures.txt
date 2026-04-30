@@ -1,0 +1,299 @@
+// Power BI DAX Measures for Indian Kids Screen Time Dashboard
+
+// ============================================
+// KEY PERFORMANCE INDICATORS (KPIs)
+// ============================================
+
+Total Children = COUNTROWS('cleaned_data')
+
+Average Screen Time = AVERAGE('cleaned_data'[Avg_Daily_Screen_Time_hr])
+
+Percentage Exceeding Limits = 
+DIVIDE(
+    COUNTROWS(FILTER('cleaned_data', 'cleaned_data'[Exceeded_Recommended_Limit] = TRUE)),
+    COUNTROWS('cleaned_data'),
+    0
+) * 100
+
+Most Common Health Impact = 
+VAR PoorSleepCount = SUM('cleaned_data'[Poor Sleep])
+VAR EyeStrainCount = SUM('cleaned_data'[Eye Strain])
+VAR AnxietyCount = SUM('cleaned_data'[Anxiety])
+VAR ObesityCount = SUM('cleaned_data'[Obesity Risk])
+VAR NoneCount = SUM('cleaned_data'[None])
+VAR MaxCount = MAX(PoorSleepCount, EyeStrainCount, AnxietyCount, ObesityCount, NoneCount)
+RETURN
+SWITCH(
+    TRUE(),
+    PoorSleepCount = MaxCount, "Poor Sleep",
+    EyeStrainCount = MaxCount, "Eye Strain",
+    AnxietyCount = MaxCount, "Anxiety",
+    ObesityCount = MaxCount, "Obesity Risk",
+    "None"
+)
+
+// ============================================
+// DEMOGRAPHIC ANALYSIS
+// ============================================
+
+Average Screen Time by Gender = 
+CALCULATE(
+    AVERAGE('cleaned_data'[Avg_Daily_Screen_Time_hr]),
+    ALLEXCEPT('cleaned_data', 'cleaned_data'[Gender])
+)
+
+Urban vs Rural Difference = 
+VAR UrbanAvg = CALCULATE(AVERAGE('cleaned_data'[Avg_Daily_Screen_Time_hr]), 'cleaned_data'[Urban_or_Rural] = "Urban")
+VAR RuralAvg = CALCULATE(AVERAGE('cleaned_data'[Avg_Daily_Screen_Time_hr]), 'cleaned_data'[Urban_or_Rural] = "Rural")
+RETURN RuralAvg - UrbanAvg
+
+Age Group = 
+SWITCH(
+    TRUE(),
+    'cleaned_data'[Age] >= 8 && 'cleaned_data'[Age] <= 10, "8-10 years",
+    'cleaned_data'[Age] >= 11 && 'cleaned_data'[Age] <= 13, "11-13 years",
+    'cleaned_data'[Age] >= 14 && 'cleaned_data'[Age] <= 16, "14-16 years",
+    'cleaned_data'[Age] >= 17 && 'cleaned_data'[Age] <= 18, "17-18 years",
+    "Unknown"
+)
+
+// ============================================
+// DEVICE ANALYSIS
+// ============================================
+
+Device Usage Percentage = 
+DIVIDE(
+    COUNTROWS(FILTER('cleaned_data', 'cleaned_data'[Primary_Device] = SELECTEDVALUE('cleaned_data'[Primary_Device]))),
+    COUNTROWS('cleaned_data'),
+    0
+) * 100
+
+Most Popular Device = 
+VAR DeviceTable = 
+SUMMARIZE(
+    'cleaned_data',
+    'cleaned_data'[Primary_Device],
+    "Count", COUNTROWS('cleaned_data')
+)
+VAR MaxCount = MAXX(DeviceTable, [Count])
+RETURN
+MAXX(
+    FILTER(DeviceTable, [Count] = MaxCount),
+    'cleaned_data'[Primary_Device]
+)
+
+Average Screen Time by Device = 
+CALCULATE(
+    AVERAGE('cleaned_data'[Avg_Daily_Screen_Time_hr]),
+    ALLEXCEPT('cleaned_data', 'cleaned_data'[Primary_Device])
+)
+
+// ============================================
+// HEALTH IMPACT ANALYSIS
+// ============================================
+
+Health Risk Score = 
+VAR ScreenTimeScore = 
+    SWITCH(
+        TRUE(),
+        'cleaned_data'[Avg_Daily_Screen_Time_hr] <= 2, 1,
+        'cleaned_data'[Avg_Daily_Screen_Time_hr] <= 4, 2,
+        'cleaned_data'[Avg_Daily_Screen_Time_hr] <= 6, 3,
+        'cleaned_data'[Avg_Daily_Screen_Time_hr] <= 8, 4,
+        5
+    )
+VAR HealthIssueScore = 'cleaned_data'[Health_Issue_Count] * 2
+VAR ExceededLimitScore = IF('cleaned_data'[Exceeded_Recommended_Limit] = TRUE, 3, 0)
+RETURN ScreenTimeScore + HealthIssueScore + ExceededLimitScore
+
+Total Health Issues = 
+SUM('cleaned_data'[Anxiety]) + 
+SUM('cleaned_data'[Eye Strain]) + 
+SUM('cleaned_data'[Obesity Risk]) + 
+SUM('cleaned_data'[Poor Sleep])
+
+Percentage with Health Issues = 
+DIVIDE(
+    COUNTROWS(FILTER('cleaned_data', 'cleaned_data'[Health_Issue_Count] > 1)),
+    COUNTROWS('cleaned_data'),
+    0
+) * 100
+
+Most Common Health Issue = 
+VAR PoorSleepPct = DIVIDE(SUM('cleaned_data'[Poor Sleep]), COUNTROWS('cleaned_data'), 0) * 100
+VAR EyeStrainPct = DIVIDE(SUM('cleaned_data'[Eye Strain]), COUNTROWS('cleaned_data'), 0) * 100
+VAR AnxietyPct = DIVIDE(SUM('cleaned_data'[Anxiety]), COUNTROWS('cleaned_data'), 0) * 100
+VAR ObesityPct = DIVIDE(SUM('cleaned_data'[Obesity Risk]), COUNTROWS('cleaned_data'), 0) * 100
+VAR MaxPct = MAX(PoorSleepPct, EyeStrainPct, AnxietyPct, ObesityPct)
+RETURN
+SWITCH(
+    TRUE(),
+    PoorSleepPct = MaxPct, "Poor Sleep (" & FORMAT(PoorSleepPct, "0.0%") & ")",
+    EyeStrainPct = MaxPct, "Eye Strain (" & FORMAT(EyeStrainPct, "0.0%") & ")",
+    AnxietyPct = MaxPct, "Anxiety (" & FORMAT(AnxietyPct, "0.0%") & ")",
+    "Obesity Risk (" & FORMAT(ObesityPct, "0.0%") & ")"
+)
+
+// ============================================
+// EDUCATIONAL ANALYSIS
+// ============================================
+
+Educational Ratio Category = 
+SWITCH(
+    TRUE(),
+    'cleaned_data'[Educational_to_Recreational_Ratio] < 0.4, "Low Educational Use",
+    'cleaned_data'[Educational_to_Recreational_Ratio] < 0.5, "Moderate Educational Use",
+    "High Educational Use"
+)
+
+Average Educational Ratio = AVERAGE('cleaned_data'[Educational_to_Recreational_Ratio])
+
+Educational vs Recreational Balance = 
+VAR EducationalTime = 'cleaned_data'[Avg_Daily_Screen_Time_hr] * 'cleaned_data'[Educational_to_Recreational_Ratio]
+VAR RecreationalTime = 'cleaned_data'[Avg_Daily_Screen_Time_hr] * (1 - 'cleaned_data'[Educational_to_Recreational_Ratio])
+RETURN EducationalTime - RecreationalTime
+
+// ============================================
+// SCREEN TIME CATEGORIES
+// ============================================
+
+Screen Time Category = 
+SWITCH(
+    TRUE(),
+    'cleaned_data'[Avg_Daily_Screen_Time_hr] <= 2, "Low (≤2 hrs)",
+    'cleaned_data'[Avg_Daily_Screen_Time_hr] <= 4, "Moderate (2-4 hrs)",
+    'cleaned_data'[Avg_Daily_Screen_Time_hr] <= 6, "High (4-6 hrs)",
+    'cleaned_data'[Avg_Daily_Screen_Time_hr] <= 8, "Very High (6-8 hrs)",
+    "Excessive (>8 hrs)"
+)
+
+Recommended Limit Status = 
+IF('cleaned_data'[Exceeded_Recommended_Limit] = TRUE, "Exceeds Limit", "Within Limit")
+
+// ============================================
+// COMPARATIVE MEASURES
+// ============================================
+
+Screen Time vs Average = 
+'cleaned_data'[Avg_Daily_Screen_Time_hr] - [Average Screen Time]
+
+Percentage Above Average = 
+DIVIDE(
+    COUNTROWS(FILTER('cleaned_data', 'cleaned_data'[Avg_Daily_Screen_Time_hr] > [Average Screen Time])),
+    COUNTROWS('cleaned_data'),
+    0
+) * 100
+
+Gender Comparison = 
+VAR MaleAvg = CALCULATE([Average Screen Time], 'cleaned_data'[Gender] = "Male")
+VAR FemaleAvg = CALCULATE([Average Screen Time], 'cleaned_data'[Gender] = "Female")
+RETURN MaleAvg - FemaleAvg
+
+// ============================================
+// TREND ANALYSIS
+// ============================================
+
+Screen Time Trend by Age = 
+VAR CurrentAge = SELECTEDVALUE('cleaned_data'[Age])
+VAR PreviousAge = CurrentAge - 1
+VAR CurrentAvg = CALCULATE([Average Screen Time], 'cleaned_data'[Age] = CurrentAge)
+VAR PreviousAvg = CALCULATE([Average Screen Time], 'cleaned_data'[Age] = PreviousAge)
+RETURN 
+IF(
+    ISBLANK(PreviousAvg), 
+    BLANK(), 
+    CurrentAvg - PreviousAvg
+)
+
+// ============================================
+// CONDITIONAL FORMATTING MEASURES
+// ============================================
+
+Health Risk Color = 
+VAR RiskScore = [Health Risk Score]
+RETURN
+SWITCH(
+    TRUE(),
+    RiskScore <= 5, "#2ca02c",  // Green - Low Risk
+    RiskScore <= 10, "#ff7f0e", // Orange - Medium Risk
+    "#d62728"                   // Red - High Risk
+)
+
+Screen Time Color = 
+VAR ScreenTime = SELECTEDVALUE('cleaned_data'[Avg_Daily_Screen_Time_hr])
+RETURN
+SWITCH(
+    TRUE(),
+    ScreenTime <= 2, "#2ca02c",   // Green
+    ScreenTime <= 4, "#ffbb78",   // Light Orange
+    ScreenTime <= 6, "#ff7f0e",   // Orange
+    "#d62728"                     // Red
+)
+
+// ============================================
+// STATISTICAL MEASURES
+// ============================================
+
+Screen Time Median = MEDIAN('cleaned_data'[Avg_Daily_Screen_Time_hr])
+
+Screen Time Standard Deviation = STDEV.P('cleaned_data'[Avg_Daily_Screen_Time_hr])
+
+Screen Time 25th Percentile = PERCENTILE.INC('cleaned_data'[Avg_Daily_Screen_Time_hr], 0.25)
+
+Screen Time 75th Percentile = PERCENTILE.INC('cleaned_data'[Avg_Daily_Screen_Time_hr], 0.75)
+
+Correlation Screen Time vs Health Issues = 
+// Note: This is a simplified correlation calculation
+VAR AvgScreenTime = [Average Screen Time]
+VAR AvgHealthIssues = AVERAGE('cleaned_data'[Health_Issue_Count])
+VAR Numerator = 
+SUMX(
+    'cleaned_data',
+    ('cleaned_data'[Avg_Daily_Screen_Time_hr] - AvgScreenTime) * 
+    ('cleaned_data'[Health_Issue_Count] - AvgHealthIssues)
+)
+VAR DenominatorX = 
+SUMX(
+    'cleaned_data',
+    POWER('cleaned_data'[Avg_Daily_Screen_Time_hr] - AvgScreenTime, 2)
+)
+VAR DenominatorY = 
+SUMX(
+    'cleaned_data',
+    POWER('cleaned_data'[Health_Issue_Count] - AvgHealthIssues, 2)
+)
+RETURN 
+DIVIDE(
+    Numerator,
+    SQRT(DenominatorX * DenominatorY),
+    0
+)
+
+// ============================================
+// FILTER CONTEXT MEASURES
+// ============================================
+
+Selected Age Range = 
+VAR MinAge = MIN('cleaned_data'[Age])
+VAR MaxAge = MAX('cleaned_data'[Age])
+RETURN 
+IF(MinAge = MaxAge, FORMAT(MinAge, "0"), FORMAT(MinAge, "0") & " - " & FORMAT(MaxAge, "0"))
+
+Selected Filters Summary = 
+VAR GenderFilter = IF(HASONEVALUE('cleaned_data'[Gender]), SELECTEDVALUE('cleaned_data'[Gender]), "All Genders")
+VAR LocationFilter = IF(HASONEVALUE('cleaned_data'[Urban_or_Rural]), SELECTEDVALUE('cleaned_data'[Urban_or_Rural]), "All Locations")
+VAR DeviceFilter = IF(HASONEVALUE('cleaned_data'[Primary_Device]), SELECTEDVALUE('cleaned_data'[Primary_Device]), "All Devices")
+RETURN 
+GenderFilter & " | " & LocationFilter & " | " & DeviceFilter
+
+// ============================================
+// DYNAMIC TITLES
+// ============================================
+
+Dynamic Chart Title = 
+"Screen Time Analysis - " & [Selected Filters Summary] & " (n=" & [Total Children] & ")"
+
+Health Impact Title = 
+"Health Impact Distribution - " & 
+FORMAT([Percentage with Health Issues], "0.0%") & 
+" have health issues"
